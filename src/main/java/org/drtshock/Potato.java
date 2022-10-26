@@ -11,16 +11,22 @@ import java.util.List;
  */
 public class Potato implements Tuber {
 
-    private final List<Condiment> condiments = new ArrayList<Condiment>();
+    private final boolean isVegan;
+    private final List<Condiment> condiments = new ArrayList<>();
 
     public static void main(String[] args) {
-        final Potato potato = new Potato();
+        final Potato potato = new Potato(args.length == 1 && args[0].equals("--vegan"));
+        if (potato.isVegan) System.out.println("This potato is vegan.");
         try {
             potato.prepare();
-            System.out.println("Of course potato is prepared and delicious.");
+            System.out.println("Of course Potato is prepared and delicious.");
         } catch (NotDeliciousException e) {
-            System.err.println("Fatal error! How could potato not be delicious?");
+            System.err.println("Fatal error! How could Potato not be delicious?\nReason: " + e.getReason());
         }
+    }
+
+    public Potato(boolean isVegan) {
+        this.isVegan = isVegan;
     }
 
     /**
@@ -39,9 +45,10 @@ public class Potato implements Tuber {
      * @throws NotDeliciousException If the potato is not delicious
      */
     public void prepare() throws NotDeliciousException {
-        this.addCondiments("sour cream", "chives", "butter", "crumbled bacon", "grated cheese", "ketchup", "salt", "tabasco");
+        this.addCondiments("chives", "butter", "pepper", "salt", "tabasco", "tomatoes", "onion");
+        if (!this.isVegan) this.addCondiments("sour cream", "crumbled bacon", "grated cheese", "ketchup");
         this.listCondiments();
-        if (!this.isDelicious()) throw new NotDeliciousException();
+        if (!this.isDelicious()) throw new NotDeliciousException(NotDeliciousReason.UNDERCOOKED);
     }
 
     /**
@@ -52,7 +59,8 @@ public class Potato implements Tuber {
     public void addCondiments(String... names) throws NotDeliciousException {
         for (String condimentName : names) {
             Condiment condiment = new Condiment(condimentName, true);
-            if (!condiment.isDelicious()) throw new NotDeliciousException();
+            if (!condiment.isDelicious()) throw new NotDeliciousException(NotDeliciousReason.NOT_DELICIOUS_CONDIMENT);
+            if (condiment.isExpired()) throw new NotDeliciousException(NotDeliciousReason.EXPIRED_CONDIMENT);
             this.getCondiments().add(condiment);
         }
     }
@@ -74,13 +82,17 @@ public class Potato implements Tuber {
      * @return true if potato is in the oven, false if otherwise
      * @throws OvenException if the oven encounters an internal exception
      */
-    public boolean isPutIntoOven() throws OvenException {
+    public boolean isPutIntoOven() throws OvenException, BurntException {
         try {
+            long begin = System.currentTimeMillis();
             final URL url = new URL("https://www.google.com/search?q=potato");
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("GET");
+            connection.addRequestProperty("User-Agent", "Potato/2.0.0");
             connection.connect();
             int inOven = connection.getResponseCode();
+            long bakeTime = (System.currentTimeMillis() - begin);
+            if (bakeTime > 1100) throw new BurntException(bakeTime);
             return inOven == 200;
         } catch (IOException ex) {
             throw new OvenException(ex);
@@ -95,7 +107,37 @@ public class Potato implements Tuber {
     public boolean isBaked() {
         try {
             return this.isPutIntoOven();
-        } catch (OvenException e) {
+        } catch (OvenException | BurntException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Checks if the potato is succesfully boiled at the right amount of degrees.
+     *
+     * @return true if the potato has succesfully been boiled, false if otherwise
+     * @throws BurntException if the potato has been burned during the process of cooking
+     */
+    public boolean hasBeenBoiledInWater() throws BurntException {
+        int waterDegrees = (int) (Math.random() * 200);
+        System.out.println("Trying to boil potato at " + waterDegrees + " degrees.");
+        if (waterDegrees < 70) {
+            return false;
+        } else if (waterDegrees > 130) {
+            throw new BurntException(waterDegrees);
+        }
+        return true;
+    }
+
+    /**
+     * Checks if this potato is cooked. Returns the result of {@link #hasBeenBoiledInWater()}.
+     *
+     * @return true if this potato is baked, false if otherwise
+     */
+    public boolean isBoiled() {
+        try {
+            return this.hasBeenBoiledInWater();
+        } catch (BurntException e) {
             return false;
         }
     }
@@ -107,7 +149,7 @@ public class Potato implements Tuber {
      */
     @Override
     public boolean isDelicious() {
-        return this.isBaked();
+        return this.isBaked() || this.isBoiled();
     }
 
     /**
@@ -117,7 +159,7 @@ public class Potato implements Tuber {
      */
     @Override
     public Tuber propagate() {
-        return new Potato();
+        return new Potato(this.isVegan);
     }
 
     /**
@@ -126,10 +168,16 @@ public class Potato implements Tuber {
     private class Condiment {
         private final String name;
         private final boolean delicious;
+        private final boolean expired;
 
-        public Condiment(String name, boolean delicious) {
+        public Condiment(String name, boolean delicious, boolean expired) {
             this.name = name;
             this.delicious = delicious;
+            this.expired = expired;
+        }
+
+        public Condiment(String name, boolean delicious) {
+            this(name, delicious, Math.random() * 100 < 3);
         }
 
         /**
@@ -139,6 +187,15 @@ public class Potato implements Tuber {
          */
         public boolean isDelicious() {
             return this.delicious;
+        }
+
+        /**
+         * Returns if this condiment is expired or not.
+         *
+         * @return true if expired, false if otherwise
+         */
+        public boolean isExpired() {
+            return expired;
         }
 
         /**
